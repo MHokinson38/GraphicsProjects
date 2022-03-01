@@ -75,8 +75,11 @@ function startup() {
   setupShaders();
 
   // Let the Terrain object set up its own buffers.
-  myTerrain = new Terrain(16, -1, 1, -1, 1);
+  myTerrain = new Terrain(48, -3, 3, -3, 3);  
   myTerrain.setupBuffers(shaderProgram);
+
+  // Test the distance 
+  
 
   // Set the background color to sky blue (you can change this if you like).
   gl.clearColor(0.82, 0.93, 0.99, 1.0);
@@ -210,8 +213,8 @@ function draw() {
                             near, far);
   
   // Generate the view matrix using lookat.
-  const lookAtPt = glMatrix.vec3.fromValues(0.0, 0.0, -1.0);
-  const eyePt = glMatrix.vec3.fromValues(0.0, 0.0, 3.0);
+  const lookAtPt = glMatrix.vec3.fromValues(0.0, 0.0, 0.0);
+  const eyePt = glMatrix.vec3.fromValues(0.0, -6, 7.0);
   const up = glMatrix.vec3.fromValues(0.0, 1.0, 0.0);
   glMatrix.mat4.lookAt(modelViewMatrix, eyePt, lookAtPt, up);
 
