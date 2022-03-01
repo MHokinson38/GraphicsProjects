@@ -57,7 +57,7 @@
         console.log("Terrain: Generated normals");
 
         // You can use this function for debugging your buffers:
-        this.printBuffers();
+        // this.printBuffers();
     }
 
 
@@ -147,7 +147,7 @@
     shapeTerrain() {
         var numFaultLines = 100;
         var delta = .025;
-        var decay = 0;
+        var decay = .005;
 
         for (var i = 0; i < numFaultLines; ++i) {
             // Generate line point and normal for that point 
@@ -155,8 +155,6 @@
 
             var normalTheta = Math.random() * Math.PI * 2;
             var normal = glMatrix.vec2.fromValues(Math.cos(normalTheta), Math.sin(normalTheta));
-
-            // console.log("Generated fault line: " + faultPoint + " with normal: " + normal);
 
             // Modify all points 
             for (var currPoint = 0; currPoint < this.numVertices; ++currPoint) {
@@ -180,8 +178,6 @@
         if (distance == -1) {
             return; // To far, do nothing
         }
-
-        // console.log("Point: " + vertex + " has distance: " + distance);
 
         // Check the dot product to determine move up or down 
         var deltaDir = glMatrix.vec2.dot(toPoint, faultNormal) >= 0 ? 1 : -1;
@@ -208,17 +204,50 @@
     /**
      * Calculate normals for the faces (Using Per-Vertex normals) 
      * 
-     * TODO: Don't do dummy normals 
      */
     calculateNormals() {
-        // Calculate dummy normals for now, (which will be correct until we shape the terrain) (one normal per vertex)
-        for (var v = 0; v < this.positionData.length/3; v++) {
-            this.normalData.push(0);
-            this.normalData.push(0);
-            this.normalData.push(1); // Normal up towards the pos Z 
+        // Init normal array to 0's for each vertex (3*numVertices)
+        this.normalData = new Array(this.positionData.length).fill(0);
+        
+        // Loop through all of the faces, and calculate the normal for that face using (v2-v1)X(v3-v1) 
+        for (var f = 0; f < this.faceData.length/3; f++) {
+            var fid = f*3;
+            var v1_idx = this.faceData[fid];        // These are the indices we will use for the normals as well 
+            var v2_idx= this.faceData[fid + 1];
+            var v3_idx = this.faceData[fid + 2];
+
+            var v1 = glMatrix.vec3.create(); this.getVertex(v1, v1_idx);
+            var v2 = glMatrix.vec3.create(); this.getVertex(v2, v2_idx);
+            var v3 = glMatrix.vec3.create(); this.getVertex(v3, v3_idx);
+
+            var v2v1 = glMatrix.vec3.create(); glMatrix.vec3.subtract(v2v1, v2, v1);
+            var v3v1 = glMatrix.vec3.create(); glMatrix.vec3.subtract(v3v1, v3, v1);
+            var normal = glMatrix.vec3.create(); glMatrix.vec3.cross(normal, v2v1, v3v1);
+
+            // Add the normal to each vertex normal (normalize as we go)
+            this.appendVertexNormals(v1_idx, normal);
+            this.appendVertexNormals(v2_idx, normal);
+            this.appendVertexNormals(v3_idx, normal);
         }   
     }
 
+    /**
+     * Adds and normalizes a new normal to the normal vector (Per-Vertex Normals)
+     * 
+     * @param {Int}    Index  - Index of the vertex normal to modify 
+     * @param {Object} Normal - Next face normal to add to the specified vertex index 
+     */
+    appendVertexNormals(idx, normal) {
+        // Fetch the index values and add to new normal, and create a new vector (to normalize easily) 
+        var newVertNorm = glMatrix.vec3.fromValues(this.normalData[idx*3] + normal[0],
+                                                   this.normalData[idx*3 + 1] + normal[1],
+                                                   this.normalData[idx*3 + 2] + normal[2]);
+        var newNormMag = glMatrix.vec3.len(newVertNorm);
+
+        this.normalData[idx*3] = newVertNorm[0] / newNormMag;
+        this.normalData[idx*3 + 1] = newVertNorm[1] / newNormMag;
+        this.normalData[idx*3 + 2] = newVertNorm[2] / newNormMag;
+    }
 
     //-------------------------------------------------------------------------
     // Setup code (run once)
@@ -341,16 +370,16 @@
                               this.positionData[i*3 + 1], " ",
                               this.positionData[i*3 + 2], " ");
         }
-        // for (var i = 0; i < this.numVertices; i++) {
-        //     console.log("n ", this.normalData[i*3], " ",
-        //                       this.normalData[i*3 + 1], " ",
-        //                       this.normalData[i*3 + 2], " ");
-        // }
-        // for (var i = 0; i < this.numFaces; i++) {
-        //     console.log("f ", this.faceData[i*3], " ",
-        //                       this.faceData[i*3 + 1], " ",
-        //                       this.faceData[i*3 + 2], " ");
-        // }
+        for (var i = 0; i < this.numVertices; i++) {
+            console.log("n ", this.normalData[i*3], " ",
+                              this.normalData[i*3 + 1], " ",
+                              this.normalData[i*3 + 2], " ");
+        }
+        for (var i = 0; i < this.numFaces; i++) {
+            console.log("f ", this.faceData[i*3], " ",
+                              this.faceData[i*3 + 1], " ",
+                              this.faceData[i*3 + 2], " ");
+        }
     }
 
 } // class Terrain

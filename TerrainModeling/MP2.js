@@ -77,8 +77,6 @@ function startup() {
   // Let the Terrain object set up its own buffers.
   myTerrain = new Terrain(48, -3, 3, -3, 3);  
   myTerrain.setupBuffers(shaderProgram);
-
-  // Test the distance 
   
 
   // Set the background color to sky blue (you can change this if you like).

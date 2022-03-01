@@ -40,11 +40,11 @@ uniform vec3 diffuseLightColor;
 uniform vec3 specularLightColor;
 
 out vec4 vertexColor;
-
+out vec3 normalVec;
 
 void main(void) {
     // Transform the vertex position and normal to view coordinates
-    vec3 vertexPositionView =(modelViewMatrix * vec4(vertexPosition, 1.0)).xyz;
+    vec3 vertexPositionView = (modelViewMatrix * vec4(vertexPosition, 1.0)).xyz;
     vec3 vertexNormalView = normalize(normalMatrix * vertexNormal);
 
     // The camera is at the origin in view coordinates
