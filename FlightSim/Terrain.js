@@ -32,7 +32,7 @@
         this.maxX = maxX;
         this.maxY = maxY;
 
-        this.Rval = 2; // For terrain generation, anything with distance over 2 from line is not changed
+        this.Rval = 5; // For terrain generation, anything with distance over 2 from line is not changed
         this.minZCoor = null;
         this.maxZCoor = null; // memoize values to avoid multiple computations 
 
@@ -200,8 +200,8 @@
      * This function does nothing.
      */
     shapeTerrain() {
-        var numFaultLines = 200;
-        var delta = .05;
+        var numFaultLines = 300;
+        var delta = .075;
         var decay = .01;
 
         for (var i = 0; i < numFaultLines; ++i) {

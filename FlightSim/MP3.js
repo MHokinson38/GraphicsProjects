@@ -51,6 +51,49 @@ var kEdgeBlack = [0.0, 0.0, 0.0];
 /** @global Edge color for white wireframe */
 var kEdgeWhite = [0.7, 0.7, 0.7];
 
+// Flight sim values and constants 
+/** @global Vec3 - Initial Position  */
+const kInitPosition = glMatrix.vec3.fromValues(0.0,-6.0,5.0);
+/** @global Vec3 - camPosition */
+var camPosition = glMatrix.vec3.create();
+/** @global Quaternion - Orientation of the camera (plane) */
+var camOrientation = glMatrix.quat.create();
+/** @global Vec3 - Direction of the Plane, will be normalized  */
+var camDirection = glMatrix.vec3.create(); 
+/** @global Vec3 - Inital direction of the camera  */
+const kInitDirection = glMatrix.vec3.fromValues(0, 6.0, -5.0); // Initally moving along pos y 
+
+/** @global Quaternion - Delta for camera orientation  */
+var orientationDelta = glMatrix.quat.create(); 
+
+/** @global Dict[3] -  Rotation angles around respective axis (Euler orientation) */
+// var eulerRotations = {'X': 0, 'Y': 0, 'Z': 0};
+/** @global Float - Euler Angle Delta: Step size for pitch and roll changes */
+const kEulerStep = .1;
+
+/** @global Const Float - Intial Cam (Plane) speed */
+const kInitSpeed = .01;
+/** @global Const Float - Step for increase/decrese speed */
+const kCamSpeedStep = .001; 
+/** @global Float - Speed of the camera */
+var camSpeed = kInitSpeed; // Play around with this 
+
+/** @global Dict - Keys which are currently pressed */
+var keys = {};
+
+/** @global Boolean - Debug Switch for print statements */
+const kDEBUG = true;
+
+/**
+ * Prints debug messages if debug switch is on 
+ * @param {String} string Debug statement 
+ */
+function debug(string) {
+  if (kDEBUG) {
+    console.log(string);
+  }
+}
+
 /**
  * Translates degrees to radians
  * @param {Number} degrees Degree input to function
@@ -75,9 +118,15 @@ function startup() {
   setupShaders();
 
   // Let the Terrain object set up its own buffers.
-  myTerrain = new Terrain(48, -3, 3, -3, 3);  
+  myTerrain = new Terrain(128, -10, 10, -10, 10);  
   myTerrain.setupBuffers(shaderProgram);
   
+  // Register Key Handlers 
+  document.onkeydown = keyDown;
+  document.onkeyup = keyUp;
+
+  // Set initial Plane values 
+  resetPlane();
 
   // Set the background color to sky blue (you can change this if you like).
   gl.clearColor(0.82, 0.93, 0.99, 1.0);
@@ -86,6 +135,87 @@ function startup() {
   requestAnimationFrame(animate);
 }
 
+//=======================
+// Flight Sim Functions 
+//=======================
+/**
+ * Key handler for pressing down 
+ * logs into global keys dict 
+ * @param {*} event 
+ */
+function keyDown(event) {
+  debug("Key Press: " + event.key);
+
+  // If 'Escape' is pressed, handle immediately (won't register holding Escape)
+  if (event.key == "Escape") {
+    resetPlane();
+  }
+
+  keys[event.key] = true;
+}
+/**
+ * Key handler for release of key 
+ * Logs into global keys dict
+ * @param {*} event 
+ */
+function keyUp(event) {
+  debug("Key Release: " + event.key);
+  keys[event.key] = false;
+}
+
+/**
+ * Handle key presses and update speed/orientation appropriately 
+ */
+function handleKeyPress() {
+  // Use local euler angle changes 
+  var eulerRotation = {'X': 0, 'Y': 0, 'Z': 0}; 
+
+  if (keys['-']) {
+    camSpeed -= kCamSpeedStep;
+  }
+  if (keys['=']) {
+    camSpeed += kCamSpeedStep;
+  }
+  if (keys['ArrowRight']) { // Roll
+    eulerRotation['Z'] -= kEulerStep; // Roll CW 
+  }
+  if (keys['ArrowLeft']) {
+    eulerRotation['Z'] += kEulerStep; // Roll CCW 
+  }
+  if (keys['ArrowUp']) { // Pitch 
+    eulerRotation['X'] += kEulerStep;
+  }
+  if (keys['ArrowDown']) {
+    eulerRotation['X'] -= kEulerStep;
+  }
+
+  // Create delta quaternion
+  glMatrix.quat.fromEuler(orientationDelta, eulerRotation['X'], eulerRotation['Y'], eulerRotation['Z']);
+}
+
+/**
+ * Changes the orientation and position of the plane 
+ */
+function handlePlaneChanges() {
+  // Orientation change 
+  glMatrix.quat.multiply(camOrientation, camOrientation, orientationDelta); 
+
+  // Find the current forward direction 
+  glMatrix.vec3.transformQuat(camDirection, kInitDirection, camOrientation);
+  glMatrix.vec3.normalize(camDirection, camDirection);
+  let deltaPos = glMatrix.vec3.create(); glMatrix.vec3.scale(deltaPos, camDirection, camSpeed);
+
+  glMatrix.vec3.add(camPosition, camPosition, deltaPos);
+}
+
+function resetPlane() {
+  debug("Resetting plane");
+
+  glMatrix.vec3.copy(camPosition, kInitPosition);
+  camSpeed = kInitSpeed;
+
+  camOrientation = glMatrix.quat.create();
+}
 
 /**
  * Creates a WebGL 2.0 context.
@@ -217,11 +347,11 @@ function draw() {
                             gl.viewportWidth / gl.viewportHeight,
                             near, far);
   
-  // Generate the view matrix using lookat.
-  const lookAtPt = glMatrix.vec3.fromValues(0.0, 0.0, 0.0);
-  const eyePt = glMatrix.vec3.fromValues(0.0, -6, 5.0);
+  // Perform the camera computations based on camOrientation and camPosition
+  const lookAtPt = glMatrix.vec3.create(); glMatrix.vec3.add(lookAtPt, camPosition, camDirection);
   const up = glMatrix.vec3.fromValues(0.0, 1.0, 0.0);
-  glMatrix.mat4.lookAt(modelViewMatrix, eyePt, lookAtPt, up);
+  glMatrix.vec3.transformQuat(up, up, camOrientation);
+  glMatrix.mat4.lookAt(modelViewMatrix, camPosition, lookAtPt, up);
 
   setMatrixUniforms();
   setLightUniforms(ambientLightColor, diffuseLightColor, specularLightColor,
@@ -311,6 +441,10 @@ function setLightUniforms(a, d, s, loc) {
  * wireframe, polgon, or both.
  */
  function animate(currentTime) {
+  // Flight simulator 
+  handleKeyPress();
+  handlePlaneChanges(); 
+
   // Draw the frame.
   draw();
   // Animate the next frame. 
