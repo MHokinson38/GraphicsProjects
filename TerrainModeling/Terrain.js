@@ -201,8 +201,8 @@
      */
     shapeTerrain() {
         var numFaultLines = 200;
-        var delta = .025;
-        var decay = .005;
+        var delta = .05;
+        var decay = .01;
 
         for (var i = 0; i < numFaultLines; ++i) {
             // Generate line point and normal for that point 

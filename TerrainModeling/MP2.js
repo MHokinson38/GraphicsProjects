@@ -32,7 +32,7 @@ var kAmbient = [227/255, 191/255, 76/255];
 /** @global Diffuse material color/intensity for Phong reflection */
 var kDiffuse = [227/255, 191/255, 76/255];
 /** @global Specular material color/intensity for Phong reflection */
-var kSpecular = [212/255, 212/255, 212/255];
+var kSpecular = [50/255, 50/255, 50/255];
 /** @global Shininess exponent for Phong reflection */
 var shininess = 2;
 
