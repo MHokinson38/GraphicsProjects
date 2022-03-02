@@ -33,6 +33,8 @@
         this.maxY = maxY;
 
         this.Rval = 2; // For terrain generation, anything with distance over 2 from line is not changed
+        this.minZCoor = null;
+        this.maxZCoor = null; // memoize values to avoid multiple computations 
 
         // Allocate the vertex array
         this.positionData = [];
@@ -94,6 +96,59 @@
         v[2] = this.positionData[i*3 + 2];
     }
 
+    /**
+     * Makes call to getVertexExtrema for Z coor and stores result to avoid 
+     * repeated computation 
+     * @returns Min Z Value in Mesh 
+     */
+    getZVertexMin() {
+        if (!this.positionData) { // Particle data might not be set for the first call
+            return -1;
+        }
+        if (this.minZCoor == null) {
+            this.minZCoor = this.getVertexExtrema((curr, next) => next < curr, 2);
+        } 
+        return this.minZCoor;
+    }
+
+    /**
+     * Makes call to getVertexExtrema for Z coor and stores result to avoid 
+     * repeated computation 
+     * @returns Max Z Value in Mesh 
+     */
+    getZVertexMax() {
+        if (!this.positionData) { // Particle data might not be set for the first call
+            return -1;
+        }
+
+        if (this.maxZCoor == null) {
+            this.maxZCoor = this.getVertexExtrema((curr, next) => next > curr, 2);
+        }
+        return this.maxZCoor;
+    }
+
+    /**
+     * Finds some extrema using a lambda comparator 
+     * 
+     * @param {Function} Comparator - How to compare indices 
+     * @param {Int}      vIdx       - The index to search across (only really makes sense to search 3 (z)) 
+     */
+    getVertexExtrema(comparator, vIdx) {
+        if (!this.positionData) { // For safety 
+            return -1;
+        }
+
+        var res = null;
+        for (var v = 0; v < this.numVertices; ++v) {
+            var currV = v*3;
+            if (res === null || comparator(this.positionData[currV + vIdx], res)) {
+                res = this.positionData[currV + vIdx];
+            }
+        }
+        
+        return res;
+    }
+
 
     /**
      * Generate the triangle and vertex data for the terrain
@@ -145,7 +200,7 @@
      * This function does nothing.
      */
     shapeTerrain() {
-        var numFaultLines = 100;
+        var numFaultLines = 200;
         var delta = .025;
         var decay = .005;
 
@@ -339,8 +394,11 @@
     // Rendering functions (run every frame in draw())
     /**
      * Renders the terrain to the screen as triangles.
+     * 
+     * @param {object} shaderProgram The shader program to indicate what is being drawn 
      */
-    drawTriangles() {
+    drawTriangles(shaderProgram) {
+        gl.uniform1f(shaderProgram.locations.drawingPolygon, 1);
         gl.bindVertexArray(this.vertexArrayObject);
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.triangleIndexBuffer);
         gl.drawElements(gl.TRIANGLES, this.triangleIndexBuffer.numItems,
@@ -350,8 +408,11 @@
 
     /**
      * Renders the terrain to the screen as edges, wireframe style.
+     * 
+     * @param {object} shaderProgram The shader program to indicate what is being drawn 
      */
-    drawEdges() {
+    drawEdges(shaderProgram) {
+        gl.uniform1f(shaderProgram.locations.drawingPolygon, -1);
         gl.bindVertexArray(this.vertexArrayObject);
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.edgeIndexBuffer);
         gl.drawElements(gl.LINES, this.edgeIndexBuffer.numItems,
