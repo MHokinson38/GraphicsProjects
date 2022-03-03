@@ -1,7 +1,7 @@
 <!DOCTYPE HTML> 
 <html lang="en"> 
 <head>
-<title>MP2: Terrain</title>
+<title>MP3: Flight Sim</title>
 <meta charset="utf-8"> 
 </head>
 
@@ -97,6 +97,11 @@ uniform vec3 ambientLightColor;
 uniform vec3 diffuseLightColor;
 uniform vec3 specularLightColor;
 
+// For the Fog 
+uniform vec4 fogColor;
+uniform float fogDensity;
+uniform bool toggleFog;
+
 in vec3 vertexNormalView;   // The interpolated vertexNormal
 in vec3 vertexPositionView; // vertex position in view coords 
 in vec4 vertexColor;
@@ -124,6 +129,16 @@ void main(void) {
     fragmentColor = vec4((  ambient * ambientLightColor
                         + diffuse * diffuseLightColor * diffuseWeight
                         + kSpecular * specularLightColor * specularWeight), 1.0);
+
+    // Incorporate the Fog (From slides)
+    if (toggleFog) {
+        #define LOG2 1.442695
+        float fogDistance = length(vertexPositionView);
+        float fogAmount = 
+            1.0 - exp2(-fogDensity * fogDensity * fogDistance * fogDistance * LOG2);
+        fogAmount = clamp(fogAmount, 0.0, 1.0);
+        fragmentColor = mix(fragmentColor, fogColor, fogAmount);
+    }
 }
 </script>
 
@@ -138,9 +153,21 @@ void main(void) {
                 <input type="radio" name="primitive" id="wireframe" value="wireframe"> Wireframe
                 <input type="radio" name="primitive" id="polygon" value="polygon" checked> Polygon
                 <input type="radio" name="primitive" id="wirepoly" value="wirepoly" > Polygon with Edges
+                <input type="button" name="primitive" id="toggleFog" value="Toggle Fog" onclick="onFogToggle()"/>
             </div>
         </fieldset>
     </form>
+
+    <h2>Flight Controls</h2>
+    <ul>
+        <li>'-' - Decrease the speed of the plane</li>
+        <li>'=' - Increase the speed of the plane</li>
+        <li>'ArrowUp' - Increase the pitch of the plane</li>
+        <li>'ArrowDown' - Decrease the pitch of the plane</li>
+        <li>'ArrowRight' - Roll Right </li>
+        <li>'ArrowLeft' - Roll Left</li>
+        <li>'Esc' - Reset the plane to original orientation, position, and speed</li>
+    </ul>
 </body>
 
 </html>

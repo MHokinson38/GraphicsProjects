@@ -200,9 +200,9 @@
      * This function does nothing.
      */
     shapeTerrain() {
-        var numFaultLines = 300;
-        var delta = .075;
-        var decay = .01;
+        var numFaultLines = 500;
+        var delta = .20;
+        var decay = .008;
 
         for (var i = 0; i < numFaultLines; ++i) {
             // Generate line point and normal for that point 

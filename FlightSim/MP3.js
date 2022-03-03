@@ -51,6 +51,14 @@ var kEdgeBlack = [0.0, 0.0, 0.0];
 /** @global Edge color for white wireframe */
 var kEdgeWhite = [0.7, 0.7, 0.7];
 
+// Fog and background colors 
+/** @global Background color (And fog color) */
+const kBackgroundColor = glMatrix.vec4.fromValues(195.0/255.0, 195.0/255.0, 195.0/255.0, 1.0);
+/** @global Const Float - Fog Density to be passes to fragment shader */
+const kFogDensity = .075; 
+/** @global Boolean - Toggle Fog */
+var showFog = true;
+
 // Flight sim values and constants 
 /** @global Vec3 - Initial Position  */
 const kInitPosition = glMatrix.vec3.fromValues(0.0,-6.0,5.0);
@@ -61,15 +69,13 @@ var camOrientation = glMatrix.quat.create();
 /** @global Vec3 - Direction of the Plane, will be normalized  */
 var camDirection = glMatrix.vec3.create(); 
 /** @global Vec3 - Inital direction of the camera  */
-const kInitDirection = glMatrix.vec3.fromValues(0, 6.0, -5.0); // Initally moving along pos y 
+const kInitDirection = glMatrix.vec3.fromValues(0, 6.0, -3.0); // Initally moving along pos y 
 
 /** @global Quaternion - Delta for camera orientation  */
 var orientationDelta = glMatrix.quat.create(); 
 
-/** @global Dict[3] -  Rotation angles around respective axis (Euler orientation) */
-// var eulerRotations = {'X': 0, 'Y': 0, 'Z': 0};
 /** @global Float - Euler Angle Delta: Step size for pitch and roll changes */
-const kEulerStep = .1;
+const kEulerStep = .2;
 
 /** @global Const Float - Intial Cam (Plane) speed */
 const kInitSpeed = .01;
@@ -118,7 +124,7 @@ function startup() {
   setupShaders();
 
   // Let the Terrain object set up its own buffers.
-  myTerrain = new Terrain(128, -10, 10, -10, 10);  
+  myTerrain = new Terrain(256, -20, 20, -20, 20);  
   myTerrain.setupBuffers(shaderProgram);
   
   // Register Key Handlers 
@@ -129,7 +135,7 @@ function startup() {
   resetPlane();
 
   // Set the background color to sky blue (you can change this if you like).
-  gl.clearColor(0.82, 0.93, 0.99, 1.0);
+  gl.clearColor(kBackgroundColor[0], kBackgroundColor[1], kBackgroundColor[2], kBackgroundColor[3]);
 
   gl.enable(gl.DEPTH_TEST);
   requestAnimationFrame(animate);
@@ -177,10 +183,10 @@ function handleKeyPress() {
     camSpeed += kCamSpeedStep;
   }
   if (keys['ArrowRight']) { // Roll
-    eulerRotation['Z'] -= kEulerStep; // Roll CW 
+    eulerRotation['Z'] -= 5*kEulerStep; // Roll CW 
   }
   if (keys['ArrowLeft']) {
-    eulerRotation['Z'] += kEulerStep; // Roll CCW 
+    eulerRotation['Z'] += 5*kEulerStep; // Roll CCW 
   }
   if (keys['ArrowUp']) { // Pitch 
     eulerRotation['X'] += kEulerStep;
@@ -206,6 +212,14 @@ function handlePlaneChanges() {
   let deltaPos = glMatrix.vec3.create(); glMatrix.vec3.scale(deltaPos, camDirection, camSpeed);
 
   glMatrix.vec3.add(camPosition, camPosition, deltaPos);
+}
+
+/**
+ * Toggles the fog in rendering settings 
+ */
+function onFogToggle() {
+  showFog = !showFog; // Invert showFog 
+  debug("Show Fog set to: " + showFog);
 }
 
 function resetPlane() {
@@ -329,6 +343,13 @@ function setupShaders() {
   gl.getUniformLocation(shaderProgram, "diffuseLightColor");
   shaderProgram.locations.specularLightColor =
   gl.getUniformLocation(shaderProgram, "specularLightColor");
+
+  shaderProgram.locations.fogColor = 
+    gl.getUniformLocation(shaderProgram, "fogColor");
+  shaderProgram.locations.fogDensity = 
+    gl.getUniformLocation(shaderProgram, "fogDensity");
+  shaderProgram.locations.toggleFog = 
+    gl.getUniformLocation(shaderProgram, "toggleFog");
 }
 
 /**
@@ -356,6 +377,7 @@ function draw() {
   setMatrixUniforms();
   setLightUniforms(ambientLightColor, diffuseLightColor, specularLightColor,
                    lightPosition);
+  setFogUniforms(); 
 
   // Set the min/max Z uniforms for the height mapping 
   gl.uniform1f(shaderProgram.locations.minZ, myTerrain.getZVertexMin());
@@ -434,6 +456,16 @@ function setLightUniforms(a, d, s, loc) {
   gl.uniform3fv(shaderProgram.locations.diffuseLightColor, d);
   gl.uniform3fv(shaderProgram.locations.specularLightColor, s);
   gl.uniform3fv(shaderProgram.locations.lightPosition, loc);
+}
+
+/**
+ * Send the Fog color and density to the shader 
+ */
+function setFogUniforms() {
+  gl.uniform4fv(shaderProgram.locations.fogColor, kBackgroundColor);
+  gl.uniform1f(shaderProgram.locations.fogDensity, kFogDensity);
+
+  gl.uniform1f(shaderProgram.locations.toggleFog, showFog);
 }
 
 /**
