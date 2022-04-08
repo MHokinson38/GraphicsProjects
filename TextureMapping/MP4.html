@@ -31,19 +31,20 @@ uniform mat3 normalMatrix;
 
 out vec3 fragPosition;
 out vec3 fragNormal;
-
+out vec2 v_texcoord; // Texel coordinate 
 
 void main(void) {
     // Transform the vertex position and normal to view coordinates
     fragPosition =(modelViewMatrix * vec4(vertexPosition, 1.0)).xyz;
     fragNormal = normalize(normalMatrix * vertexNormal);
 
+    v_texcoord = vertexPosition.xy; // This is using model space coords, what if we used view coords, which might 
+                                    // Matter if we are rotating the teapot? 
     
     gl_Position = projectionMatrix * modelViewMatrix * vec4(vertexPosition, 1.0);
 }
 </script>
 
-<!-- MP2: Modify the shaders to implement Phong shading instead of Gourand! -->
 <script id="shader-fs" type="x-shader/x-fragment">#version 300 es
 // Fragment Shader
 // Implements Phong shading. See the lecture on "Basic Shading" for details.
@@ -65,8 +66,11 @@ uniform vec3 ambientLightColor;
 uniform vec3 diffuseLightColor;
 uniform vec3 specularLightColor;
 
+uniform sampler2D u_texture; // The location of the texture image
+
 in vec3 fragPosition;
 in vec3 fragNormal;
+in vec2 v_texcoord; 
 
 out vec4 fragmentColor;
 
@@ -89,10 +93,14 @@ void main(void) {
     float rDotV = max(dot(reflectionVector, viewVector), 0.0);
     float specularWeight = pow(rDotV, shininess);
 
+    // Sample a color from the texture
+    vec4 texColor = texture(u_texture, v_texcoord);
+
     // Sum up all three lighting components into the color for the vertex,
     // and send it to the fragment shader.
-    fragmentColor = vec4((  kAmbient * ambientLightColor
-                        + kDiffuse * diffuseLightColor * diffuseWeight
+    // Replacing kAmbient and kDiffuse with the textColor, since we are now sampling with the image 
+    fragmentColor = vec4((  texColor.rgb * ambientLightColor
+                        + texColor.rgb * diffuseLightColor * diffuseWeight
                         + kSpecular * specularLightColor * specularWeight), 1.0);
 
 }

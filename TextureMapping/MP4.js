@@ -61,6 +61,23 @@ var kEdgeBlack = [0.0, 0.0, 0.0];
 /** @global Edge color for white wireframe */
 var kEdgeWhite = [0.7, 0.7, 0.7];
 
+//----------------------------------------------
+// Texture Mapping 
+/** @global Image texture to map to the mesh */
+var texture;
+
+//----------------------------------------------
+// User interaction 
+/** @global Is a mouse button pressed? */
+var isDown = false;
+/** @global Mouse coordinates */
+var x = -1;
+var y = -1;
+/** @global Accumulated rotation around Y in degrees */
+var rotY = 0;
+/** @global Accumulated rotation around X axis in degrees */
+var rotX = 0;
+
 /**
  * Translates degrees to radians
  * @param {Number} degrees Degree input to function
@@ -86,6 +103,37 @@ function startup() {
   // Let the mesh object set up its own buffers.
   myMesh = new TriMesh();
   myMesh.readFile("teapot.obj");
+
+  //---------------------------------------
+  // Handle user input (event handlers for mouse pushes) 
+  canvas.addEventListener('mousedown', e => {
+    x = e.offsetX;
+    y = e.offsetY;
+    isDown = true;
+  });
+  canvas.addEventListener('mouseup', e => {
+    x = -1;
+    y = -1;
+    isDown = false;
+  });
+  canvas.addEventListener('mousemove', e => {
+    // Add the difference in movement to rotY 
+    if (isDown) {
+      rotY += e.offsetX - x;
+      rotX += e.offsetY - y;
+    }
+    x = e.offsetX;
+    y = e.offsetY;
+  });
+
+  // Load a texture (Below texture loading code from the course website)
+  loadTexture("amogus.jpg"); // Because I am a child 
+  // Tell WebGL we want to affect texture unit 0
+  gl.activeTexture(gl.TEXTURE0);
+  // Bind the texture to texture unit 0
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+  // Tell the shader we bound the texture to texture unit 0
+  gl.uniform1i(shaderProgram.locations.uSampler, 0);    
   
   // Generate the projection matrix using perspective projection.
   const near = 0.1;
@@ -153,6 +201,32 @@ function loadShaderFromDOM(id) {
   return shader; 
 }
 
+/**
+ * Load a texture from an image.
+ * From CS418 Course website 
+ */
+ function loadTexture(filename){
+  // Create a texture.
+  texture = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+
+  // Fill the texture with a 1x1 blue pixel.
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
+              new Uint8Array([0, 0, 255, 255]));
+
+  // Asynchronously load an image
+  // If image load unsuccessful, it will be a blue surface
+  var image = new Image();
+  image.src = filename;
+  image.addEventListener('load', function() {
+    // Now that the image has loaded make copy it to the texture.
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA,gl.UNSIGNED_BYTE, image);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    console.log(`Loaded file: ${filename}`);
+  });
+}
+
 
 /**
  * Sets up the vertex and fragment shaders.
@@ -204,9 +278,12 @@ function setupShaders() {
   shaderProgram.locations.ambientLightColor =
     gl.getUniformLocation(shaderProgram, "ambientLightColor");
   shaderProgram.locations.diffuseLightColor =
-  gl.getUniformLocation(shaderProgram, "diffuseLightColor");
+    gl.getUniformLocation(shaderProgram, "diffuseLightColor");
   shaderProgram.locations.specularLightColor =
-  gl.getUniformLocation(shaderProgram, "specularLightColor");
+    gl.getUniformLocation(shaderProgram, "specularLightColor");
+
+  shaderProgram.locations.uSampler =
+    gl.getUniformLocation(shaderProgram, "u_texture"); // Link the location of the texture to the shaders 
 }
 
 /**
@@ -220,10 +297,11 @@ function draw() {
   
   // Generate the view matrix using lookat.
   glMatrix.mat4.identity(modelViewMatrix);
+  glMatrix.mat4.rotateY(modelViewMatrix, myMesh.getModelTransform(), degToRad(rotY));
+  glMatrix.mat4.rotateX(modelViewMatrix, modelViewMatrix, degToRad(rotX));
   glMatrix.mat4.lookAt(viewMatrix, eyePt, lookAtPt, up);
-  glMatrix.mat4.multiply(modelViewMatrix,  viewMatrix,myMesh.getModelTransform());
+  glMatrix.mat4.multiply(modelViewMatrix, viewMatrix, modelViewMatrix);
     
-      
   setMatrixUniforms();
   setLightUniforms(ambientLightColor, diffuseLightColor, specularLightColor,
                    lightPosition);
