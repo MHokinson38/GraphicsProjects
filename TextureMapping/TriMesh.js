@@ -71,7 +71,7 @@ class TriMesh{
       var myPromise = this.asyncGetFile(filename);
       myPromise.then((retrievedText) => {
         this.loadFromOBJ(retrievedText);
-        console.log("Got the file");
+        console.log(`Got the file: ${filename}`);
       })
       .catch(
         (reason) => {
@@ -101,6 +101,28 @@ class TriMesh{
     loadFromOBJ(fileText)
     {    
         //Your code here
+        var lines = fileText.split('\n'); // Line by line 
+
+        // Create arrays to buffer values and return from here, then set 
+        // when this function is called 
+        for (var line = 0; line < lines.length; ++line) { // Parsing each line 
+            var tokens = lines[line].split(/\b\s+(?!$)/);        // Raw regex for whitespace split
+
+            if (tokens[0] == "f") {
+                this.fBuffer.push(parseInt(tokens[1]) - 1);
+                this.fBuffer.push(parseInt(tokens[2]) - 1);
+                this.fBuffer.push(parseInt(tokens[3]) - 1); // Apparently these are 1-indexed for some reason
+            }
+            else if (tokens[0] == "v") {
+                this.vBuffer.push(parseFloat(tokens[1]));
+                this.vBuffer.push(parseFloat(tokens[2]));
+                this.vBuffer.push(parseFloat(tokens[3]));
+            }
+            else {
+                console.log(`Noting a comment line (or possible error) with line: ${lines[line]}`);
+                continue;
+            }
+        }
         
         this.numVertices = this.vBuffer.length / 3;
         this.numFaces = this.fBuffer.length / 3;  
@@ -119,7 +141,7 @@ class TriMesh{
         this.isLoaded = true;
         
         this.computeAABB();
-        console.log("AABB: \n",this.minXYZ, " ", this.maxXYZ);
+        console.log(`AABB: \nMin: ${this.minXYZ}, Max: ${this.maxXYZ}`);
         
         this.canonicalTransform();
     }
@@ -340,8 +362,17 @@ class TriMesh{
     */    
     
     canonicalTransform(){
-      //Your code here
-     
+        var xTrans = -1 * (this.maxXYZ[0] + this.minXYZ[0])/2; // Midpoint of the X coords 
+        var yTrans = -1 * (this.maxXYZ[1] + this.minXYZ[1])/2; // Midpoint of the Y coords 
+        var zTrans = -1 * (this.maxXYZ[2] + this.minXYZ[2])/2; // Midpoint of the Z coords 
+
+        var scale = 1.0/Math.max(this.maxXYZ[0] - this.minXYZ[0], Math.max(this.maxXYZ[1] - this.minXYZ[1], this.maxXYZ[2] - this.minXYZ[2]));
+
+        console.log(`Computer transformations: X: ${xTrans}, Y: ${yTrans}, Z: ${zTrans}, Scale: ${scale}`);
+
+        // Construct the translation matrix 
+        glMatrix.mat4.scale(this.modelMatrix, this.modelMatrix, [scale, scale, scale]);
+        glMatrix.mat4.translate(this.modelMatrix, this.modelMatrix, [xTrans, yTrans, zTrans]);
     }
     
     /**
