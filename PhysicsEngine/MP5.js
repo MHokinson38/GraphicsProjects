@@ -47,9 +47,10 @@ const lSpecular = [1.0, 1.0, 1.0];
 
 /** @global List of particles in container*/
 var particles = [];
-
 /** @global Previous time (for phys calculations) */
 var previousTime = 0;
+/** @global Keyboard input monitoring */
+var keys = {};
 
 //======= Particle constants =============
 /** @global  Densitity of the particles for calculating mass */
@@ -61,6 +62,19 @@ const initSpeed = 3;
 /** @global Range of radii to generate, [lower,upper] */
 const radiusRange = [.1,.5];
 
+const kDEBUG = true;
+
+/**
+ * Prints debug messages if debug switch is on 
+ * @param {String} string Debug statement 
+ */
+ function debug(string) {
+   console.log("In debug");
+  if (kDEBUG) {
+    console.log(string);
+  }
+}
+
 /**
  * Translates degrees to radians
  * @param {Number} degrees Degree input to function
@@ -70,6 +84,46 @@ function degToRad(degrees) {
   return degrees * Math.PI / 180;
 }
 
+/**
+ * Key handler for pressing down 
+ * logs into global keys dict 
+ * @param {*} event 
+ */
+ function keyDown(event) {
+  // console.log("Key press ashhhhhh");
+  // debug("Key Press: " + event.key);
+
+  // keys[event.keyCode] = true;
+
+  if (event.keyCode == 32) { // Space Bar 
+    console.log("Hitting the space bar");
+    addParticle();
+  }
+  if (event.keyCode == 8) { // Backspace 
+    particles = [];
+  }
+}
+/**
+ * Key handler for release of key 
+ * Logs into global keys dict
+ * @param {*} event 
+ */
+function keyUp(event) {
+  debug("Key Release: " + event.key);
+  keys[event.keyCode] = false;
+}
+
+/**
+ * Handle key presses and update speed/orientation appropriately 
+ */
+ function handleKeyPress() { 
+  if (keys[32]) { // Space Bar 
+    addParticle();
+  }
+  if (keys[8]) { // Backspace 
+    particles.clear();
+  }
+ }
 //-----------------------------------------------------------------------------
 // Setup functions (run once when the webpage loads)
 /**
@@ -83,9 +137,13 @@ function startup() {
   // Compile and link a shader program.
   setupShaders();
 
+  // Register Key Handlers 
+  document.onkeydown = keyDown;
+  document.onkeyup = keyUp;
+
   // Note to self: Make sure to render the balls in bounds pretty far away, 
   // essentially setting the points as anything close to the origin is too close 
-  for(var i = 0; i < 10; ++i) {
+  for(var i = 0; i < 1; ++i) {
     addParticle();
   }
   
@@ -270,6 +328,8 @@ function deltaTime(currentTime) {
  *    webpage loaded. 
  */
 function animate(currentTime) {
+  // handleKeyPress();
+
   // Add code here using currentTime if you want to add animations
   var deltaT = deltaTime(currentTime);
 
