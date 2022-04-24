@@ -90,40 +90,13 @@ function degToRad(degrees) {
  * @param {*} event 
  */
  function keyDown(event) {
-  // console.log("Key press ashhhhhh");
-  // debug("Key Press: " + event.key);
-
-  // keys[event.keyCode] = true;
-
   if (event.keyCode == 32) { // Space Bar 
-    console.log("Hitting the space bar");
     addParticle();
   }
   if (event.keyCode == 8) { // Backspace 
     particles = [];
   }
 }
-/**
- * Key handler for release of key 
- * Logs into global keys dict
- * @param {*} event 
- */
-function keyUp(event) {
-  debug("Key Release: " + event.key);
-  keys[event.keyCode] = false;
-}
-
-/**
- * Handle key presses and update speed/orientation appropriately 
- */
- function handleKeyPress() { 
-  if (keys[32]) { // Space Bar 
-    addParticle();
-  }
-  if (keys[8]) { // Backspace 
-    particles.clear();
-  }
- }
 //-----------------------------------------------------------------------------
 // Setup functions (run once when the webpage loads)
 /**
@@ -139,7 +112,6 @@ function startup() {
 
   // Register Key Handlers 
   document.onkeydown = keyDown;
-  document.onkeyup = keyUp;
 
   // Note to self: Make sure to render the balls in bounds pretty far away, 
   // essentially setting the points as anything close to the origin is too close 
@@ -328,8 +300,6 @@ function deltaTime(currentTime) {
  *    webpage loaded. 
  */
 function animate(currentTime) {
-  // handleKeyPress();
-
   // Add code here using currentTime if you want to add animations
   var deltaT = deltaTime(currentTime);
 
