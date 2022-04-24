@@ -34,7 +34,7 @@ var kAmbient = [0.25, 0.75, 1.0];
 /** @global Diffuse material color/intensity for Phong reflection */
 var kDiffuse = [0.25, 0.75, 1.0];
 /** @global Specular material color/intensity for Phong reflection */
-var kSpecular = [0.25, 0.75, 1.0];
+var kSpecular = [1.0, 1.0, 1.0];
 /** @global Shininess exponent for Phong reflection */
 var shininess = 2;
 
@@ -47,6 +47,19 @@ const lSpecular = [1.0, 1.0, 1.0];
 
 /** @global List of particles in container*/
 var particles = [];
+
+/** @global Previous time (for phys calculations) */
+var previousTime = 0;
+
+//======= Particle constants =============
+/** @global  Densitity of the particles for calculating mass */
+const particleDensity = .5;
+/** @global Bounding box limit (-bound, bound) in all dimensions*/
+const chamberSize = 2.5;
+/** @global Initial speed (m/s) */
+const initSpeed = 3;
+/** @global Range of radii to generate, [lower,upper] */
+const radiusRange = [.1,.5];
 
 /**
  * Translates degrees to radians
@@ -70,23 +83,11 @@ function startup() {
   // Compile and link a shader program.
   setupShaders();
 
-  // Note to self: Position for the particles could be used at the eye point, 
-  // and then the balls are all going to be at 0,0 in world cords 
-  particles.push(new Particle(glMatrix.vec3.fromValues(0,0,3), 
-                                    [0,0,0], 
-                                    [0,0,1], 
-                                    1, 
-                                    10));
-//   particles.push(new Particle(glMatrix.vec3.fromValues(5,5,10), 
-//                                     [0,0,0], 
-//                                     [0,0,1], 
-//                                     1, 
-//                                     10));
-//   particles.push(new Particle(glMatrix.vec3.fromValues(0,-10,10), 
-//                                     [0,0,0], 
-//                                     [0,0,1], 
-//                                     1, 
-//                                     10));
+  // Note to self: Make sure to render the balls in bounds pretty far away, 
+  // essentially setting the points as anything close to the origin is too close 
+  for(var i = 0; i < 10; ++i) {
+    addParticle();
+  }
   
   // Create the projection matrix with perspective projection.
   const near = 0.1;
@@ -99,9 +100,45 @@ function startup() {
   gl.clearColor(0.0, 0.0, 0.0, 1.0);
   gl.enable(gl.DEPTH_TEST);
   gl.enable(gl.CULL_FACE);
+  gl.cullFace(gl.FRONT); // Thanks campuswire 
 
   // Start animating.
   requestAnimationFrame(animate);
+}
+
+/**
+ * Creates a particle with a random position in the simulation box. It will also 
+ * generate a random color, radius, and mass (mass will be dependent on the radius of the sphere
+ * so that collisions between particles, if implemented, look realistic)
+ */
+function addParticle() {
+  // Generate position and random velocity, then normalize velocity to have speed of 3 m/s
+  var xPos = 2 * chamberSize * Math.random() - chamberSize; // Center at -chamberSize, chamberSize
+  var yPos = 2 * chamberSize * Math.random() - chamberSize;
+  var zPos = 2 * chamberSize * Math.random() - chamberSize;
+
+  var initVel = glMatrix.vec3.fromValues(Math.random(), Math.random(), Math.random());
+  glMatrix.vec3.normalize(initVel, initVel);
+  glMatrix.vec3.scale(initVel, initVel, initSpeed);
+
+  // Generate random color 
+  var colR = Math.random();
+  var colG = Math.random();
+  var colB = Math.random();
+
+  // Generate the radius of the particle, at random within range
+  var radius = radiusRange[0] + Math.random() * (radiusRange[1] - radiusRange[0]);
+  var mass = particleDensity * (4.0/3.0 * Math.PI * Math.pow(radius, 3));
+
+  particles.push(new Particle(glMatrix.vec3.fromValues(xPos, yPos, zPos),
+                              initVel,
+                              glMatrix.vec3.fromValues(colR, colG, colB),
+                              radius, 
+                              mass
+                              ));
+
+  console.log(`Just rendered particle: ${particles.length}`);
+  particles[particles.length - 1].consoleDisplay();
 }
 
 
@@ -215,33 +252,60 @@ function setupShaders() {
 //-----------------------------------------------------------------------------
 // Animation functions (run every frame)
 /**
+ * 
+ * @param {number} currentTime 
+ */
+function deltaTime(currentTime) {
+  var currentTSec = currentTime * .001; // ms -> s 
+  var elapsedTime = currentTSec - previousTime;
+
+  previousTime = currentTSec;
+  
+  return elapsedTime;
+}
+
+/**
  * Draws the current frame and then requests to draw the next frame.
  * @param {number} currentTime The elapsed time in milliseconds since the
  *    webpage loaded. 
  */
 function animate(currentTime) {
   // Add code here using currentTime if you want to add animations
+  var deltaT = deltaTime(currentTime);
 
   // Set up the canvas for this frame
   gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  
+  var viewMatrix = glMatrix.mat4.create();
 
   // Create a sphere mesh and set up WebGL buffers for it.
   // Generating a single buffer for all of our spheres, then we are going to have to modify the 
   // lookat to draw different spheres
-  sphere1 = new Sphere(5);
+  sphere1 = new Sphere(3);
   sphere1.setupBuffers(shaderProgram);
+  sphere1.bindVAO();
+
+  // Create the view matrix using lookat.
+  const lookAtPt = glMatrix.vec3.fromValues(0.0, 0.0, 0.0);
+  const eyePt = glMatrix.vec3.fromValues(0.0, 0.0, 10.0);
+  const up = glMatrix.vec3.fromValues(0.0, 1.0, 0.0); 
+  glMatrix.mat4.lookAt(viewMatrix, eyePt, lookAtPt, up);
   
+  // Transform the light position to view coordinates
+  var lightPosition = glMatrix.vec3.fromValues(5, 5, -15);
+  glMatrix.vec3.transformMat4(lightPosition, lightPosition, viewMatrix);
+  setLightUniforms(lAmbient, lDiffuse, lSpecular, lightPosition);
+
   particles.forEach(particle => {
-      var modelMatrix = glMatrix.mat4.create();
-      var viewMatrix = glMatrix.mat4.create();
-    
-      // Create the view matrix using lookat.
-      const lookAtPt = glMatrix.vec3.fromValues(0.0, 0.0, 0.0);
-      const eyePt = particle.position;
-      console.log(`Putting eye position at: ${eyePt}`);
-      const up = glMatrix.vec3.fromValues(0.0, 1.0, 0.0); 
-      glMatrix.mat4.lookAt(viewMatrix, eyePt, lookAtPt, up);
+      // Do the particle update 
+      particle.update(deltaT * .5);
+
+      var modelMatrix = glMatrix.mat4.create();      
+      // Translate the model matrix to handle the position and size of the 
+      // particle we are rendering
+      glMatrix.mat4.translate(modelMatrix, modelMatrix, particle.position);
+      glMatrix.mat4.scale(modelMatrix, modelMatrix, [particle.radius, particle.radius, particle.radius]); 
     
       // Concatenate the model and view matrices.
       // Remember matrix multiplication order is important.
@@ -249,21 +313,17 @@ function animate(currentTime) {
     
       setMatrixUniforms();
     
-      // Transform the light position to view coordinates
-      var lightPosition = glMatrix.vec3.fromValues(5, 5, -5);
-      glMatrix.vec3.transformMat4(lightPosition, lightPosition, viewMatrix);
-    
-      setLightUniforms(lAmbient, lDiffuse, lSpecular, lightPosition);
+      kAmbient = particle.color; 
+      kDiffuse = particle.color;
       setMaterialUniforms(kAmbient, kDiffuse, kSpecular, shininess);
     
       // You can draw multiple spheres by changing the modelViewMatrix, calling
       // setMatrixUniforms() again, and calling gl.drawArrays() again for each
       // sphere. You can use the same sphere object and VAO for all of them,
       // since they have the same triangle mesh.
-      sphere1.bindVAO();
       gl.drawArrays(gl.TRIANGLES, 0, sphere1.numTriangles*3);
-      sphere1.unbindVAO();
-  });
+    });
+    sphere1.unbindVAO();
 
   // Use this function as the callback to animate the next frame.
   requestAnimationFrame(animate);
