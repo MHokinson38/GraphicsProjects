@@ -1,7 +1,7 @@
 /**
- * @file MP5.js - A simple WebGL rendering engine
+ * @file MP4.js - A simple WebGL rendering engine
  * @author Ian Rudnick <itr2@illinois.edu>
- * @brief Starter code for CS 418 MP5 at the University of Illinois at
+ * @brief Starter code for CS 418 MP4 at the University of Illinois at
  * Urbana-Champaign.
  * 
  * Updated Spring 2021 for WebGL 2.0/GLSL 3.00 ES.
@@ -17,7 +17,7 @@ var canvas;
 var shaderProgram;
 
 /** @global An object holding the geometry for your 3D model */
-var sphere1;
+var myMesh;
 
 /** @global The Model matrix */
 var modelViewMatrix = glMatrix.mat4.create();
@@ -30,50 +30,60 @@ var normalMatrix = glMatrix.mat3.create();
 
 // Material parameters
 /** @global Ambient material color/intensity for Phong reflection */
-var kAmbient = [0.25, 0.75, 1.0];
+var kAmbient = [227/255, 191/255, 76/255];
 /** @global Diffuse material color/intensity for Phong reflection */
-var kDiffuse = [0.25, 0.75, 1.0];
+var kDiffuse = [227/255, 191/255, 76/255];
 /** @global Specular material color/intensity for Phong reflection */
-var kSpecular = [1.0, 1.0, 1.0];
+var kSpecular = [227/255, 191/255, 76/255];
 /** @global Shininess exponent for Phong reflection */
 var shininess = 2;
 
-/** @global Ambient light color */
-const lAmbient = [0.4, 0.4, 0.4];
-/** @global Diffuse light color */
-const lDiffuse = [1.0, 1.0, 1.0];
-/** @global Specular  light color */
-const lSpecular = [1.0, 1.0, 1.0];
+// Light parameters
+/** @global Light position in VIEW coordinates */
+var lightPosition = [0, 2, 2];
+/** @global Ambient light color/intensity for Phong reflection */
+var ambientLightColor = [0.1, 0.1, 0.1];
+/** @global Diffuse light color/intensity for Phong reflection */
+var diffuseLightColor = [1, 1, 1];
+/** @global Specular light color/intensity for Phong reflection */
+var specularLightColor = [1, 1, 1];
 
-/** @global List of particles in container*/
-var particles = [];
-/** @global Previous time (for phys calculations) */
-var previousTime = 0;
-/** @global Keyboard input monitoring */
-var keys = {};
+//Camera parameters
+/** @global point being lookat at in World coordinates */
+const lookAtPt = glMatrix.vec3.fromValues(0.0, 0.0, -1.0);
+/** @global camera location in World coordinates */
+const eyePt = glMatrix.vec3.fromValues(0.0, 0.0, 1.5);
+/** @global vertical direction of camera in World coordinates */
+const up = glMatrix.vec3.fromValues(0.0, 1.0, 0.0);
 
-//======= Particle constants =============
-/** @global  Densitity of the particles for calculating mass */
-const particleDensity = .5;
-/** @global Bounding box limit (-bound, bound) in all dimensions*/
-const chamberSize = 2.5;
-/** @global Initial speed (m/s) */
-const initSpeed = 3;
-/** @global Range of radii to generate, [lower,upper] */
-const radiusRange = [.1,.5];
+/** @global Edge color for black wireframe */
+var kEdgeBlack = [0.0, 0.0, 0.0];
+/** @global Edge color for white wireframe */
+var kEdgeWhite = [0.7, 0.7, 0.7];
 
-const kDEBUG = true;
+/** @global Boolean - Toggle Gooch Shading  */
+var useGooch = false;
+/** @global Cool color used for Gooch shading */
+var kBlue = [0/255, 0/255, 130/255];
+/** @global Warm color used for Gooch Shading  */
+var kYellow  = [84/255, 84/255, 0/255];
 
-/**
- * Prints debug messages if debug switch is on 
- * @param {String} string Debug statement 
- */
- function debug(string) {
-   console.log("In debug");
-  if (kDEBUG) {
-    console.log(string);
-  }
-}
+//----------------------------------------------
+// Texture Mapping 
+/** @global Image texture to map to the mesh */
+var texture;
+
+//----------------------------------------------
+// User interaction 
+/** @global Is a mouse button pressed? */
+var isDown = false;
+/** @global Mouse coordinates */
+var x = -1;
+var y = -1;
+/** @global Accumulated rotation around Y in degrees */
+var rotY = 0;
+/** @global Accumulated rotation around X axis in degrees */
+var rotX = 0;
 
 /**
  * Translates degrees to radians
@@ -84,21 +94,8 @@ function degToRad(degrees) {
   return degrees * Math.PI / 180;
 }
 
-/**
- * Key handler for pressing down 
- * logs into global keys dict 
- * @param {*} event 
- */
- function keyDown(event) {
-  if (event.keyCode == 32) { // Space Bar 
-    addParticle();
-  }
-  if (event.keyCode == 8) { // Backspace 
-    particles = [];
-  }
-}
 //-----------------------------------------------------------------------------
-// Setup functions (run once when the webpage loads)
+// Setup functions (run once)
 /**
  * Startup function called from the HTML code to start program.
  */
@@ -107,68 +104,47 @@ function startup() {
   canvas = document.getElementById("glCanvas");
   gl = createGLContext(canvas);
 
-  // Compile and link a shader program.
+  // Compile and link the shader program.
   setupShaders();
 
-  // Register Key Handlers 
-  document.onkeydown = keyDown;
+  // Let the mesh object set up its own buffers.
+  myMesh = new TriMesh();
+  myMesh.readFile("bunny.obj");
 
-  // Note to self: Make sure to render the balls in bounds pretty far away, 
-  // essentially setting the points as anything close to the origin is too close 
-  for(var i = 0; i < 1; ++i) {
-    addParticle();
-  }
+  //---------------------------------------
+  // Handle user input (event handlers for mouse pushes) 
+  canvas.addEventListener('mousedown', e => {
+    x = e.offsetX;
+    y = e.offsetY;
+    isDown = true;
+  });
+  canvas.addEventListener('mouseup', e => {
+    x = -1;
+    y = -1;
+    isDown = false;
+  });
+  canvas.addEventListener('mousemove', e => {
+    // Add the difference in movement to rotY 
+    if (isDown) {
+      rotY += e.offsetX - x;
+      rotX += e.offsetY - y;
+    }
+    x = e.offsetX;
+    y = e.offsetY;
+  });  
   
-  // Create the projection matrix with perspective projection.
+  // Generate the projection matrix using perspective projection.
   const near = 0.1;
   const far = 200.0;
   glMatrix.mat4.perspective(projectionMatrix, degToRad(45), 
                             gl.viewportWidth / gl.viewportHeight,
                             near, far);
-    
-  // Set the background color to black (you can change this if you like).    
-  gl.clearColor(0.0, 0.0, 0.0, 1.0);
+
+  // Set the background color to sky blue (you can change this if you like).
+  gl.clearColor(0.82, 0.93, 0.99, 1.0);
+
   gl.enable(gl.DEPTH_TEST);
-  gl.enable(gl.CULL_FACE);
-  gl.cullFace(gl.FRONT); // Thanks campuswire 
-
-  // Start animating.
   requestAnimationFrame(animate);
-}
-
-/**
- * Creates a particle with a random position in the simulation box. It will also 
- * generate a random color, radius, and mass (mass will be dependent on the radius of the sphere
- * so that collisions between particles, if implemented, look realistic)
- */
-function addParticle() {
-  // Generate position and random velocity, then normalize velocity to have speed of 3 m/s
-  var xPos = 2 * chamberSize * Math.random() - chamberSize; // Center at -chamberSize, chamberSize
-  var yPos = 2 * chamberSize * Math.random() - chamberSize;
-  var zPos = 2 * chamberSize * Math.random() - chamberSize;
-
-  var initVel = glMatrix.vec3.fromValues(Math.random(), Math.random(), Math.random());
-  glMatrix.vec3.normalize(initVel, initVel);
-  glMatrix.vec3.scale(initVel, initVel, initSpeed);
-
-  // Generate random color 
-  var colR = Math.random();
-  var colG = Math.random();
-  var colB = Math.random();
-
-  // Generate the radius of the particle, at random within range
-  var radius = radiusRange[0] + Math.random() * (radiusRange[1] - radiusRange[0]);
-  var mass = particleDensity * (4.0/3.0 * Math.PI * Math.pow(radius, 3));
-
-  particles.push(new Particle(glMatrix.vec3.fromValues(xPos, yPos, zPos),
-                              initVel,
-                              glMatrix.vec3.fromValues(colR, colG, colB),
-                              radius, 
-                              mass
-                              ));
-
-  console.log(`Just rendered particle: ${particles.length}`);
-  particles[particles.length - 1].consoleDisplay();
 }
 
 
@@ -223,7 +199,6 @@ function loadShaderFromDOM(id) {
   return shader; 
 }
 
-
 /**
  * Sets up the vertex and fragment shaders.
  */
@@ -242,8 +217,8 @@ function setupShaders() {
     alert("Failed to setup shaders");
   }
 
-  // If you have multiple different shader programs, you'll need to move this
-  // function to draw() and call it whenever you want to switch programs
+  // We only need the one shader program for this rendering, so we can just
+  // bind it as the current program here.
   gl.useProgram(shaderProgram);
 
   // Query the index of each attribute and uniform in the shader program.
@@ -274,89 +249,70 @@ function setupShaders() {
   shaderProgram.locations.ambientLightColor =
     gl.getUniformLocation(shaderProgram, "ambientLightColor");
   shaderProgram.locations.diffuseLightColor =
-  gl.getUniformLocation(shaderProgram, "diffuseLightColor");
+    gl.getUniformLocation(shaderProgram, "diffuseLightColor");
   shaderProgram.locations.specularLightColor =
-  gl.getUniformLocation(shaderProgram, "specularLightColor");
-}
+    gl.getUniformLocation(shaderProgram, "specularLightColor");
 
-//-----------------------------------------------------------------------------
-// Animation functions (run every frame)
-/**
- * 
- * @param {number} currentTime 
- */
-function deltaTime(currentTime) {
-  var currentTSec = currentTime * .001; // ms -> s 
-  var elapsedTime = currentTSec - previousTime;
-
-  previousTime = currentTSec;
-  
-  return elapsedTime;
+  shaderProgram.locations.useGooch = 
+    gl.getUniformLocation(shaderProgram, "useGooch");
+  shaderProgram.locations.kBlue =
+    gl.getUniformLocation(shaderProgram, "kBlue");
+  shaderProgram.locations.kYellow =
+    gl.getUniformLocation(shaderProgram, "kYellow");
 }
 
 /**
- * Draws the current frame and then requests to draw the next frame.
- * @param {number} currentTime The elapsed time in milliseconds since the
- *    webpage loaded. 
+ * Draws the mesh to the screen.
  */
-function animate(currentTime) {
-  // Add code here using currentTime if you want to add animations
-  var deltaT = deltaTime(currentTime);
-
-  // Set up the canvas for this frame
+function draw() {
+  // Transform the clip coordinates so the render fills the canvas dimensions.
   gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
+  // Clear the color buffer and the depth buffer.
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   
-  var viewMatrix = glMatrix.mat4.create();
-
-  // Create a sphere mesh and set up WebGL buffers for it.
-  // Generating a single buffer for all of our spheres, then we are going to have to modify the 
-  // lookat to draw different spheres
-  sphere1 = new Sphere(5);
-  sphere1.setupBuffers(shaderProgram);
-  sphere1.bindVAO();
-
-  // Create the view matrix using lookat.
-  const lookAtPt = glMatrix.vec3.fromValues(0.0, 0.0, 0.0);
-  const eyePt = glMatrix.vec3.fromValues(0.0, 0.0, 10.0);
-  const up = glMatrix.vec3.fromValues(0.0, 1.0, 0.0); 
+  // Generate the view matrix using lookat.
+  glMatrix.mat4.identity(modelViewMatrix);
+  glMatrix.mat4.rotateY(modelViewMatrix, myMesh.getModelTransform(), degToRad(rotY));
+  glMatrix.mat4.rotateX(modelViewMatrix, modelViewMatrix, degToRad(rotX));
   glMatrix.mat4.lookAt(viewMatrix, eyePt, lookAtPt, up);
+  glMatrix.mat4.multiply(modelViewMatrix, viewMatrix, modelViewMatrix);
+    
+  setMatrixUniforms();
+  setLightUniforms(ambientLightColor, diffuseLightColor, specularLightColor,
+                   lightPosition);
   
-  // Transform the light position to view coordinates
-  var lightPosition = glMatrix.vec3.fromValues(5, 5, -15);
-  glMatrix.vec3.transformMat4(lightPosition, lightPosition, viewMatrix);
-  setLightUniforms(lAmbient, lDiffuse, lSpecular, lightPosition);
-
-  particles.forEach(particle => {
-      // Do the particle update 
-      particle.update(deltaT * .5);
-
-      var modelMatrix = glMatrix.mat4.create();      
-      // Translate the model matrix to handle the position and size of the 
-      // particle we are rendering
-      glMatrix.mat4.translate(modelMatrix, modelMatrix, particle.position);
-      glMatrix.mat4.scale(modelMatrix, modelMatrix, [particle.radius, particle.radius, particle.radius]); 
-    
-      // Concatenate the model and view matrices.
-      // Remember matrix multiplication order is important.
-      glMatrix.mat4.multiply(modelViewMatrix, viewMatrix, modelMatrix);
-    
-      setMatrixUniforms();
-    
-      kAmbient = particle.color; 
-      kDiffuse = particle.color;
-      setMaterialUniforms(kAmbient, kDiffuse, kSpecular, shininess);
-    
-      // You can draw multiple spheres by changing the modelViewMatrix, calling
-      // setMatrixUniforms() again, and calling gl.drawArrays() again for each
-      // sphere. You can use the same sphere object and VAO for all of them,
-      // since they have the same triangle mesh.
-      gl.drawArrays(gl.TRIANGLES, 0, sphere1.numTriangles*3);
-    });
-    sphere1.unbindVAO();
-
-  // Use this function as the callback to animate the next frame.
-  requestAnimationFrame(animate);
+  // Draw the triangles, the wireframe, or both, based on the render selection.
+  if (document.getElementById("polygon").checked) { 
+    setMaterialUniforms(kAmbient, kDiffuse, kSpecular, shininess);
+    myMesh.drawTriangles(shaderProgram);
+  }
+  else if (document.getElementById("wirepoly").checked) {
+    setMaterialUniforms(kAmbient, kDiffuse, kSpecular, shininess); 
+    gl.enable(gl.POLYGON_OFFSET_FILL);
+    gl.polygonOffset(1, 1);
+    myMesh.drawTriangles(shaderProgram);
+    gl.disable(gl.POLYGON_OFFSET_FILL);
+    setMaterialUniforms(kEdgeBlack, kEdgeBlack, kEdgeBlack, shininess);
+    myMesh.drawEdges(shaderProgram);
+  }
+  else if (document.getElementById("wireframe").checked) {
+    setMaterialUniforms(kEdgeBlack, kEdgeBlack, kEdgeBlack, shininess);
+    myMesh.drawEdges(shaderProgram);
+  }
+  if (document.getElementById("gooch").checked == true) {
+    //update a uniform variable to let 
+    //vertex shader know whether or not to us Gooch shading
+    useGooch = true;
+    gl.uniform1f(shaderProgram.locations.useGooch, useGooch);
+    gl.uniform3fv(shaderProgram.locations.kBlue, kBlue);
+    gl.uniform3fv(shaderProgram.locations.kYellow, kYellow);
+  }
+  else {
+    useGooch = false;
+    gl.uniform1f(shaderProgram.locations.useGooch, useGooch);
+    gl.uniform3fv(shaderProgram.locations.kBlue, kBlue);
+    gl.uniform3fv(shaderProgram.locations.kYellow, kYellow);
+  }
 }
 
 
@@ -407,4 +363,17 @@ function setLightUniforms(a, d, s, loc) {
   gl.uniform3fv(shaderProgram.locations.diffuseLightColor, d);
   gl.uniform3fv(shaderProgram.locations.specularLightColor, s);
   gl.uniform3fv(shaderProgram.locations.lightPosition, loc);
+}
+
+/**
+ * Animates...allows user to change the geometry view between
+ * wireframe, polgon, or both.
+ */
+ function animate(currentTime) {
+  
+  if (myMesh.loaded()){
+        draw();
+  }
+  // Animate the next frame. 
+  requestAnimationFrame(animate);
 }
